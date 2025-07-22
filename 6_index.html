@@ -1905,6 +1905,7 @@
                         arrow.color = hexColor;
                         if (arrow.lineEl) {
                             arrow.lineEl.setAttribute('stroke', hexColor);
+							arrow.lineEl.style.color = hexColor;
                             arrow.groupEl.style.color = hexColor;
                         }
                     }
@@ -2078,6 +2079,7 @@
             finalLine.setAttribute('stroke', color || '#000000');
             finalLine.setAttribute('stroke-width', '2');
             finalLine.setAttribute('marker-end', 'url(#arrowhead)');
+            finalLine.style.color = color || '#000000';
             group.style.color = color || '#000000';
             group.appendChild(finalLine);
 
