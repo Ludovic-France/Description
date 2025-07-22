@@ -1,0 +1,21 @@
+[
+  {"name": "Attention", "url": "attention.png"},
+  {"name": "Fleche_verte", "url": "coche.png"},
+  {"name": "Maintenance", "url": "maintenance.png"},
+  {"name": "Notice", "url": "information.png"},
+  {"name": "AU", "url": "au.png"},
+  {"name": "BI", "url": "bi.png"},
+  {"name": "Scrutateur", "url": "scrutateur.png"},
+  {"name": "Verrouillage", "url": "verrouillage.png"},
+  {"name": "Inter_mgb", "url": "interverrouillage.png"},
+  {"name": "Inter_azm", "url": "azm.png"},
+  {"name": "Ecrasement", "url": "./pictogramme/ecrasement.jpg"},
+  {"name": "Ecrasement2", "url": "./pictogramme/ecrasement2.jpg"},
+  {"name": "Electricite", "url": "./pictogramme/electrisation.jpg"},
+  {"name": "Brulure", "url": "./pictogramme/brulure.png"},
+  {"name": "Coupure", "url": "./pictogramme/coupure.png"},  
+  {"name": "Laser", "url": "./pictogramme/laser.jpg"},
+  {"name": "Magnetique", "url": "./pictogramme/magnetique.jpg"},
+  {"name": "ESD", "url": "./pictogramme/Esd.jpg"},  
+  {"name": "Bruit", "url": "./pictogramme/bruit.jpg"}
+]

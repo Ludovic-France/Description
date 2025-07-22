@@ -1,0 +1,2333 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Outil d'Annotation d'image</title>
+
+    <!-- Inclusion de html2canvas pour l'export PNG via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"
+        integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+	<script src="iconJS.js"></script>
+
+    <style>
+        /* --- Variables Globales --- */
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #f0f0f0;
+            --background-color: #ffffff;
+            --text-color: #333333;
+            --border-color: #cccccc;
+            --button-bg: #e9e9e9;
+            --button-hover-bg: #dcdcdc;
+            --button-active-bg: #c9c9c9;
+            --button-disabled-bg: #f5f5f5;
+            --button-disabled-color: #aaaaaa;
+            --sidebar-width: 15%;
+            --label-fixed-height: 3em;
+            /* Hauteur labels T/B */
+            --label-fixed-width: 200px;
+            /* Largeur labels L/R */
+            --current-icon-size: 40px;
+            /* Taille icônes palette */
+        }
+
+        /* --- Reset & Body --- */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            background-color: var(--secondary-color);
+            color: var(--text-color);
+        }
+
+        /* --- Styles Communs (Boutons, Inputs, Labels) --- */
+        button,
+        .button-like {
+            display: inline-block;
+            padding: 8px 15px;
+            margin: 5px 2px;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            background-color: var(--button-bg);
+            color: var(--text-color);
+            font-size: 0.9em;
+            text-align: center;
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+            vertical-align: middle;
+            user-select: none;
+        }
+
+        button:hover,
+        .button-like:hover {
+            background-color: var(--button-hover-bg);
+            border-color: #bbbbbb;
+        }
+
+        button:active,
+        .button-like:active {
+            background-color: var(--button-active-bg);
+            transform: translateY(1px);
+        }
+
+        button:disabled,
+        .button-like:disabled {
+            background-color: var(--button-disabled-bg);
+            color: var(--button-disabled-color);
+            border-color: #e0e0e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Input Range */
+        input[type="range"] {
+            width: calc(100% - 10px);
+            margin: 5px;
+            vertical-align: middle;
+            cursor: pointer;
+        }
+
+        label {
+            display: block;
+            margin: 10px 5px 2px 5px;
+            font-size: 0.9em;
+            font-weight: bold;
+            color: #555;
+        }
+
+        small {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 3px;
+            display: block;
+        }
+
+        /* --- Structure Principale --- */
+        #app-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* --- Bandeau Gauche --- */
+        #sidebar-left {
+            width: var(--sidebar-width);
+            background-color: var(--background-color);
+            padding: 15px;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            z-index: 10;
+            border-right: 1px solid var(--border-color);
+        }
+
+        #sidebar-left h3,
+        #sidebar-right h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+            color: var(--primary-color);
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 8px;
+        }
+
+        #sidebar-left h4 {
+            margin-top: 15px;
+            margin-bottom: 10px;
+            font-size: 1em;
+            color: #444;
+        }
+
+        /* Palette Icônes Grid */
+        #icon-palette {
+            margin-top: 10px;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(var(--current-icon-size), 1fr));
+            gap: 10px;
+            align-items: center;
+            justify-items: center;
+        }
+
+        .draggable-item {
+            cursor: grab;
+            user-select: none;
+        }
+
+        #draggable-text-template {
+            background-color: #fff;
+            border: 1px dashed #ccc;
+            font-style: italic;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            grid-column: 1 / -1;
+        }
+
+        #draggable-text-template span {
+            font-size: 0.9em;
+        }
+
+        .palette-icon-item {
+            padding: 2px;
+            border: none;
+            background: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: var(--current-icon-size);
+            height: var(--current-icon-size);
+            transition: transform 0.1s ease;
+        }
+
+        .palette-icon-item:hover {
+            transform: scale(1.1);
+        }
+
+        .palette-icon-item img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            vertical-align: middle;
+            pointer-events: none;
+        }
+
+        /* Palette de couleurs */
+        #color-palette {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 5px;
+            margin-bottom: 10px;
+            padding-left: 5px;
+        }
+
+        .color-swatch {
+            width: 24px;
+            height: 24px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.1s ease, border-color 0.2s ease;
+        }
+
+        .color-swatch:hover {
+            transform: scale(1.1);
+            border-color: #888;
+        }
+
+        .color-swatch.active-color {
+            border: 2px solid var(--primary-color);
+            transform: scale(1.1);
+            box-shadow: 0 0 3px rgba(52, 152, 219, 0.5);
+        }
+
+
+        /* --- Zone Principale --- */
+        #main-content {
+            flex-grow: 1;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: auto;
+            position: relative;
+            background-color: #ffffff /*var(--secondary-color);*/
+        }
+
+        #main-content.dragging-over {
+            background-color: #e0eaf1;
+        }
+
+		/* --- Style du Titre Principal --- */
+        #main-title-container {
+            position: absolute; /* Sort du flux normal, n'affecte pas flexbox */
+            /*top: 10px;  Espace par rapport au haut de main-content, à commenter pour placer le texte au dessus de l'image */
+            left: 50%; /* Centre horizontalement */
+            transform: translateX(-50%); /* Ajustement fin pour centrer parfaitement */
+            z-index: 60; /* Au-dessus des labels (5) et annotations (50), mais sous UI éventuelle */
+            background-color: rgba(255, 255, 255, 0.85); /* Fond semi-transparent */
+            padding: 4px 12px;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+            margin: 0; /* Annule marges par défaut du h1 */
+            font-size: 1.1em; /* Taille de police du titre */
+            font-weight: bold;
+            color: #444; /* Couleur du titre */
+            text-align: center;
+			white-space: normal; /* CHANGÉ: Autorise le retour à la ligne */
+			max-width: 85%;      /* AUGMENTÉ (ajustez si nécessaire) */
+			/* overflow: hidden;*//*     SUPPRIMÉ */
+			/* text-overflow: ellipsis;*//* SUPPRIMÉ */
+            cursor: default; /* Curseur par défaut sur le h1 */
+            visibility: hidden; /* Caché par défaut */
+        }
+
+        #main-title-container span.editable {
+            display: inline-block; /* Permet padding et meilleure interaction */
+            min-width: 40px; /* Taille minimale cliquable */
+            padding: 1px 4px;
+            border-radius: 3px;
+            outline: none; /* Pas d'outline navigateur au focus */
+            cursor: text; /* Curseur texte sur la partie éditable */
+            border: 1px dashed transparent; /* Bordure discrète, visible au focus */
+            transition: border-color 0.2s ease, background-color 0.2s ease;
+        }
+
+        #main-title-container span.editable:focus {
+            border-color: var(--primary-color); /* Bordure bleue pendant l'édition */
+            background-color: white; /* Fond blanc pendant l'édition */
+        }
+
+        #image-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #image-container {
+            position: absolute;
+            border: 1px solid var(--border-color);
+            width: auto;
+            height: auto;
+            max-width: none;
+            max-height: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #e8e8e8;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            color: transparent;
+            /* Pas de zoom : pas de transform/transition ici */
+        }
+
+        #image-container.has-image {
+            background-color: transparent;
+        }
+
+        #loaded-image {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        #image-container.has-image #loaded-image {
+            visibility: visible;
+        }
+
+        #drop-prompt {
+            position: absolute;
+            color: #888;
+            text-align: center;
+            padding: 10px;
+			height : 100px;
+			width : 300px;
+            pointer-events: none;
+			background: yellow;
+			color: red;*
+        }
+
+        #image-container.has-image #drop-prompt {
+            display: none;
+        }
+
+        /* --- Bandeau Droit --- */
+        #sidebar-right {
+            width: var(--sidebar-width);
+            background-color: var(--background-color);
+            padding: 15px;
+            box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            z-index: 10;
+            border-left: 1px solid var(--border-color);
+        }
+
+        #sidebar-right .action-group {
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+        }
+
+        #sidebar-right .action-group:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        #sidebar-right button,
+        #sidebar-right .button-like {
+            width: calc(100% - 4px);
+            margin-left: 0;
+            margin-right: 0;
+        }
+
+        /* --- Annotations Déplaçables --- */
+        .annotation {
+            position: absolute;
+            cursor: move;
+            border: 1px dashed transparent;
+            min-width: 20px;
+            min-height: 20px;
+            z-index: 50;
+            box-sizing: border-box;
+        }
+
+        .annotation.selected {
+            border: 2px dashed var(--primary-color);
+            z-index: 100;
+        }
+
+        .annotation .resizer {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: var(--primary-color);
+            border: 1px solid #fff;
+            border-radius: 50%;
+            display: none;
+        }
+
+        .annotation.selected .resizer {
+            display: block;
+        }
+
+        .annotation .resizer.br {
+            bottom: -5px;
+            right: -5px;
+            cursor: nwse-resize;
+        }
+
+        .annotation.text-annotation {
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 3px 6px;
+            border-radius: 4px;
+            overflow: hidden;
+            /* resize: both; */ /* Enlevé car géré par JS */
+            border: 1px solid #bbb;
+            box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.1);
+            font-size: 0.9em;
+            line-height: 1.3;
+            word-wrap: break-word; /* Pour gérer le retour à la ligne */
+        }
+
+        .annotation.text-annotation.editing {
+            background-color: white;
+            border: 1px solid var(--primary-color);
+            cursor: text;
+            box-shadow: 0 0 5px rgba(52, 152, 219, 0.5);
+        }
+
+        .annotation.icon-annotation {
+            background: none;
+            border: none;
+        }
+
+        .annotation.icon-annotation img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .annotation.selected.icon-annotation {
+            outline: 2px dashed var(--primary-color);
+            outline-offset: 2px;
+        }
+
+        .delete-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 18px;
+            height: 18px;
+            background-color: #e74c3c;
+            color: white;
+            border: 1px solid white;
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: bold;
+            line-height: 16px;
+            text-align: center;
+            cursor: pointer;
+            display: none;
+            z-index: 101;
+            box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+        }
+
+        .annotation.selected .delete-btn {
+            display: block;
+        }
+
+        .delete-btn:hover {
+            background-color: #c0392b;
+        }
+
+        /* --- Étiquettes Périphériques --- */
+        .surrounding-labels {
+            position: absolute;
+            display: flex;
+            overflow: hidden;
+            visibility: hidden;
+            z-index: 5;
+            /* MODIFIÉ: Fond transparent par défaut */
+            background-color: transparent;
+            box-sizing: border-box;
+            /* MODIFIÉ: Plus de bordures */
+            border: none;
+        }
+
+        #top-labels,
+        #bottom-labels {
+            flex-direction: row;
+            height: var(--label-fixed-height);
+        }
+
+        #left-labels,
+        #right-labels {
+            flex-direction: column;
+            width: var(--label-fixed-width);
+        }
+
+        /* Style des items (annotations texte fixes) */
+        .surrounding-labels .annotation.text-annotation {
+            position: relative !important;
+            left: auto !important;
+            top: auto !important;
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: 0.85em;
+            color: #555;
+            /* MODIFIÉ: Plus de bordures, fond, ou ombre */
+            border: none;
+            border-radius: 0;
+            background-color: transparent;
+            box-shadow: none;
+            resize: none;
+            min-height: 0;
+            min-width: 0;
+            padding: 1px 3px;
+            cursor: default !important;
+            overflow: hidden;
+            white-space: normal; /* Permet le retour à la ligne */
+            word-break: break-word;
+            position: relative;
+            line-height: 1.2;
+        }
+
+        .surrounding-labels .annotation.text-annotation.editing {
+            background-color: white;
+            z-index: 110;
+            border: 1px solid var(--primary-color);
+        }
+
+        /* Masquer resizer et delete button pour labels fixes */
+        .surrounding-labels .annotation .resizer,
+        .surrounding-labels .annotation .delete-btn {
+            display: none !important;
+        }
+
+        /* Point d'origine flèche */
+        .arrow-origin-handle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background-color: red;
+            border: 1px solid rgba(0,0,0,0.2);
+            border-radius: 50%;
+            cursor: crosshair;
+            z-index: 1;
+            box-shadow: 0 0 2px rgba(0,0,0,0.5);
+        }
+        .arrow-origin-handle:hover {
+             transform: scale(1.2);
+        }
+
+        #top-labels .arrow-origin-handle { bottom: 0px; left: 50%; transform: translateX(-50%); }
+        #bottom-labels .arrow-origin-handle { top: 0px; left: 50%; transform: translateX(-50%); }
+        #left-labels .arrow-origin-handle { right: 0px; top: 50%; transform: translateY(-50%); }
+        #right-labels .arrow-origin-handle { left: 0px; top: 50%; transform: translateY(-50%); }
+
+        /* NOUVEAU: Classe pour masquer le texte des labels vides */
+		.label-text-hidden .label-text-content,
+		.label-text-hidden .arrow-origin-handle {
+			visibility: hidden;
+		}
+        
+        /* Les styles pour le bouton oeil et les bordures masquées sont supprimés */
+
+        /* Lignes de séparation INTERNES (SUPPRIMÉ) */
+        /* #top-labels .annotation:not(:last-child), etc. sont retirés car il n'y a plus de bordures */
+        
+
+        /* --- Couche SVG pour les Flèches --- */
+        #arrow-svg-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            overflow: visible;
+        }
+
+        #arrow-svg-layer line {
+            pointer-events: stroke;
+            cursor: pointer;
+            stroke-linecap: round;
+        }
+        #arrow-svg-layer g.selected > line {
+            stroke-width: 4;
+            stroke-dasharray: 5 3;
+        }
+
+        .arrow-handle {
+            pointer-events: all;
+            cursor: grab;
+            fill: var(--primary-color);
+            stroke: white;
+            stroke-width: 1;
+            r: 5;
+            display: none;
+        }
+        #arrow-svg-layer g.selected > .arrow-handle {
+            display: block;
+        }
+        .arrow-handle:active {
+            cursor: grabbing;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Conteneur global -->
+    <div id="app-container">
+        <!-- ==================== BANDEAU GAUCHE ==================== -->
+        <div id="sidebar-left">
+            <h3>Éléments</h3>
+            <div>
+                <label for="icon-size-slider">Taille icônes palette:</label>
+                <input type="range" id="icon-size-slider" min="24" max="64" value="40">
+                <span id="icon-size-value">40px</span>
+            </div>
+            <div>
+                <label>Couleur Texte/Flèche:</label> <!-- Updated label -->
+                <!-- Palette de couleurs -->
+                <div id="color-palette">
+                    <span class="color-swatch active-color" data-color="#000000" style="background-color: #000000;" title="Noir"></span>
+                    <span class="color-swatch" data-color="#E74C3C" style="background-color: #E74C3C;" title="Rouge"></span>
+                    <span class="color-swatch" data-color="#3498DB" style="background-color: #3498DB;" title="Bleu"></span>
+                    <span class="color-swatch" data-color="#2ECC71" style="background-color: #2ECC71;" title="Vert"></span>
+                    <span class="color-swatch" data-color="#F1C40F" style="background-color: #F1C40F;" title="Jaune"></span>
+                    <span class="color-swatch" data-color="#9B59B6" style="background-color: #9B59B6;" title="Violet"></span>
+					<span class="color-swatch" data-color="#FFFFFF" style="background-color: #FFFFFF;" title="Blanc"></span>
+					<span class="color-swatch" data-color="#FF0000" style="background-color: #FF0000;" title="Red"></span>
+					<span class="color-swatch" data-color="#0000FF" style="background-color: #0000FF;" title="Blue"></span>
+					<span class="color-swatch" data-color="#00FF00" style="background-color: #00FF00;" title="Green"></span>
+					<span class="color-swatch" data-color="#FFFF00" style="background-color: #FFFF00;" title="Yellow"></span>
+					<span class="color-swatch" data-color="#00FFFF" style="background-color: #00FFFF;" title="Cyan"></span>
+                    <!-- Ajoutez plus de couleurs si nécessaire -->
+                </div>
+            </div>
+            <div style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+                <input type="file" id="json-icon-loader" accept=".json" style="display: none;">
+                <button class="button-like" onclick="document.getElementById('json-icon-loader').click()">Importer Icônes Palette</button>
+                <small>Charge un fichier JSON d'icônes.</small>
+            </div>
+            <div id="draggable-text-template" class="draggable-item" draggable="true" data-type="text" style="margin-top: 20px;">
+                <span class="label-text-content">Texte Annoté</span> <!-- Texte dans un span -->
+            </div>
+            <div id="icon-palette">
+                <!--<h4>Pictogrammes</h4>-->
+                <!-- Icônes -->
+            </div>
+        </div>
+
+        <!-- ==================== ZONE PRINCIPALE ==================== -->
+        <div id="main-content">
+            <!-- Couche SVG pour les flèches (créée par JS) -->
+            <svg id="arrow-svg-layer"></svg>
+			<h1 id="main-title-container">
+				<span contenteditable="true" class="editable" id="machineName">Désignation</span>
+		   </h1>
+
+            <div id="top-labels" class="surrounding-labels"></div>
+            <div id="bottom-labels" class="surrounding-labels"></div>
+            <div id="left-labels" class="surrounding-labels"></div>
+            <div id="right-labels" class="surrounding-labels"></div>
+
+            <div id="image-wrapper">
+                <div id="image-container">
+                    <span id="drop-prompt">Charger, déposer ou copier une image ici. Noter les descriptions voulues. Tirer les flèches à partir des boulets. Glisser les objets à implanter.</span>
+                    <img id="loaded-image" alt="Illustration de machine">
+                </div>
+            </div>
+            <!-- Annotations déplaçables -->
+        </div>
+
+        <!-- ==================== BANDEAU DROIT ==================== -->
+        <div id="sidebar-right">
+             <h3>Actions</h3>
+            <div class="action-group">
+                <h4>Image</h4>
+                <input type="file" id="image-loader" accept="image/*" style="display: none;">
+                <button onclick="document.getElementById('image-loader').click()">Charger Image</button>
+                <!-- Zoom Slider Supprimé -->
+            </div>
+            <div class="action-group">
+                <h4>Projet</h4> <!-- Updated Section Title -->
+                <button id="delete-btn" disabled>Supprimer Sélection</button>
+				<button id="hide_annot">Masquer Étiquettes Vides</button>
+                <input type="file" id="project-loader" accept=".json" style="display: none;"> <!-- Changed ID -->
+                <button class="button-like" onclick="document.getElementById('project-loader').click()" id="import-project-btn">📂 Importer Projet (JSON)</button> <!-- Changed ID and Text -->
+                <small>Charge un fichier JSON de projet complet.</small> <!-- Updated description -->
+            </div>
+            <div class="action-group">
+                 <h4>Export</h4>
+                 <button id="export-project-btn">💾 Enregistrer Projet (JSON)</button> <!-- Changed ID and Text -->
+                 <!--<small>JSON: Projet complet. PNG: Image visuelle.</small> <!{2}** Updated description **{2}>-->
+            </div>
+			<ul style="font-size:0.8rem;color:#666;margin-top:auto;list-style:disc;padding-left:1em;">
+			  <li>Glissez ou coller une image dans la zone centrale.</li>
+			  <li>Saisir le texte et tirer la flèche à partir du point rouge.</li>
+			  <li style="color:blue;">Ctl+B pour <b>gras</b>, Ctl+U pour <u>souligner</u>, Ctl+I pour <i>italique</i></li>
+			  <li>Masquer les étiquettes vides avant de faire une copie écran pour un rendu plus élégant.</li>
+			  <li>Utilisez <b>💾 Enregistrer</b> pour télécharger le projet en JSON, puis <b>📂 Importer</b> pour le recharger.</li>
+			</ul>
+        </div>
+    </div><!-- Fin #app-container -->
+
+    <!-- ==================== SCRIPT JAVASCRIPT ==================== -->
+    <script>
+        // --- Références DOM ---
+        const topLabelsContainer = document.getElementById('top-labels');
+        const bottomLabelsContainer = document.getElementById('bottom-labels');
+        const leftLabelsContainer = document.getElementById('left-labels');
+        const rightLabelsContainer = document.getElementById('right-labels');
+        const sidebarLeft = document.getElementById('sidebar-left');
+        const sidebarRight = document.getElementById('sidebar-right');
+        const mainContent = document.getElementById('main-content');
+        const imageWrapper = document.getElementById('image-wrapper');
+        const imageContainer = document.getElementById('image-container');
+        const loadedImage = document.getElementById('loaded-image');
+        const dropPrompt = document.getElementById('drop-prompt');
+        const imageLoader = document.getElementById('image-loader');
+        const jsonIconLoader = document.getElementById('json-icon-loader');
+        const projectLoader = document.getElementById('project-loader'); // Changed ID reference
+        const importProjectBtn = document.getElementById('import-project-btn'); // Changed ID reference
+        const iconPalette = document.getElementById('icon-palette');
+        const exportProjectBtn = document.getElementById('export-project-btn'); // Changed ID reference
+        const deleteBtn = document.getElementById('delete-btn');
+        const colorPalette = document.getElementById('color-palette');
+        const iconSizeSlider = document.getElementById('icon-size-slider');
+        const iconSizeValue = document.getElementById('icon-size-value');
+        const draggableTextTemplate = document.getElementById('draggable-text-template');
+		const mainTitleContainer = document.getElementById('main-title-container');
+        const machineNameSpan = document.getElementById('machineName');
+        let arrowSvgLayer = null;
+
+        // --- État global ---
+        let annotations = []; // Annotations DÉPLAÇABLES
+        let arrows = []; // Flèches dessinées [{ id, x1, y1, x2, y2, color, groupEl, lineEl, startHandleEl, endHandleEl }]
+        let selectedItem = {
+            type: null,
+            id: null,
+            element: null
+        };
+        let initialIconSize = 32;
+        let nextAnnotationId = 0;
+        let nextArrowId = 0;
+        let isResizing = false;
+        let isDragging = false; // Drag annotation
+        let isDrawingArrow = false;
+        let isDraggingArrowHandle = false;
+        let dragOffsetX, dragOffsetY;
+        let resizeStartX, resizeStartY, initialWidth, initialHeight; // For resizing
+        let currentDrawingArrow = {
+            lineElement: null,
+            startX: 0,
+            startY: 0,
+            color: '#000000'
+        };
+        let draggedArrowHandle = {
+            arrowId: null,
+            handleType: null
+        };
+        let activeColor = '#000000'; // Couleur active de la palette
+        let imageNaturalWidth = 0;
+        let imageNaturalHeight = 0;
+        let imageDisplayWidth = 0;
+        let imageDisplayHeight = 0;
+        let topBottomLabelHeightPx = 0; // Calculée depuis CSS '2em'
+        const leftRightLabelWidthPx = 200; // Largeur fixe CSS
+        let originalLabelText = null; // Pour annuler l'édition label fixe
+        
+        // MODIFIÉ: Nouvelle variable d'état pour le bouton
+        let areEmptyLabelsHidden = false; 
+
+        // --- Constantes ---
+        const NUM_TOP_LABELS = 4;
+        const NUM_BOTTOM_LABELS = 4;
+        const NUM_LEFT_LABELS = 8;
+        const NUM_RIGHT_LABELS = 8;
+        const SVG_NS = "http://www.w3.org/2000/svg";
+
+        // --- Initialisation ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeSurroundingLabels();
+            computeLabelHeights();
+            populateIconPalette();
+            setupEventListeners();
+            updateIconSizeDisplay();
+            updateLayoutBasedOnImage(); // Init layout
+            ensureSvgLayer(); // Ensure SVG layer exists on startup
+        });
+
+        // --- Calcul Hauteur Labels T/B ---
+        function computeLabelHeights() {
+            const tempDiv = document.createElement('div');
+            tempDiv.style.height = getComputedStyle(document.documentElement).getPropertyValue('--label-fixed-height');
+            tempDiv.style.position = 'absolute';
+            tempDiv.style.visibility = 'hidden';
+            document.body.appendChild(tempDiv);
+            topBottomLabelHeightPx = tempDiv.offsetHeight;
+            document.body.removeChild(tempDiv);
+        }
+
+        // --- Initialisation Labels Fixes ---
+        function initializeSurroundingLabels() {
+            createFixedLabelItems(topLabelsContainer, NUM_TOP_LABELS, 'top');
+            createFixedLabelItems(bottomLabelsContainer, NUM_BOTTOM_LABELS, 'bottom');
+            createFixedLabelItems(leftLabelsContainer, NUM_LEFT_LABELS, 'left');
+            createFixedLabelItems(rightLabelsContainer, NUM_RIGHT_LABELS, 'right');
+        }
+
+        function createFixedLabelItems(container, count, prefix) {
+            container.innerHTML = '';
+            for (let i = 1; i <= count; i++) {
+                const labelId = `${prefix}-label-${i}`;
+                const labelDiv = document.createElement('div');
+                labelDiv.id = labelId;
+                labelDiv.classList.add('annotation', 'text-annotation');
+                labelDiv.dataset.type = 'fixed-label';
+                labelDiv.contentEditable = false; // Parent non éditable
+                labelDiv.style.resize = 'none';
+                labelDiv.style.color = '#555'; // Default color for fixed labels
+
+                const textSpan = document.createElement('span');
+                textSpan.classList.add('label-text-content');
+                // MODIFIÉ: Le texte par défaut est maintenant "Saisir"
+                textSpan.textContent = 'Saisir';
+                labelDiv.appendChild(textSpan);
+
+                const originHandle = document.createElement('span');
+                originHandle.classList.add('arrow-origin-handle');
+                originHandle.title = "Tracer une flèche";
+                originHandle.addEventListener('mousedown', startArrowDraw);
+                labelDiv.appendChild(originHandle);
+
+                // SUPPRIMÉ: Le bouton oeil n'est plus créé
+
+                labelDiv.addEventListener('dblclick', editTextAnnotation);
+                labelDiv.addEventListener('mousedown', (e) => {
+                    // MODIFIÉ: La condition n'a plus besoin de vérifier le bouton oeil
+                    if (!e.target.classList.contains('arrow-origin-handle')) {
+                        selectElement(e.currentTarget);
+                        e.stopPropagation();
+                    }
+                });
+                container.appendChild(labelDiv);
+            }
+        }
+
+        // --- Gestion Palette Icônes ---
+        function populateIconPalette() {
+            const titleElement = iconPalette.querySelector('h4');
+            iconPalette.innerHTML = '';
+            if (titleElement) {
+                iconPalette.appendChild(titleElement);
+            }
+            if (!currentIconData || currentIconData.length === 0) {
+                iconPalette.innerHTML += '<p style="font-size: 0.85em; color: #777; grid-column: 1 / -1;">Aucune icône.</p>';
+                return;
+            }
+            iconPalette.style.setProperty('--current-icon-size', `${initialIconSize}px`);
+
+            currentIconData.forEach(icon => {
+                if (!icon || typeof icon.name !== 'string' || typeof icon.url !== 'string') {
+                    console.warn("Format icône invalide:", icon);
+                    return;
+                }
+                const div = document.createElement('div');
+                div.classList.add('draggable-item', 'palette-icon-item');
+                div.draggable = true;
+                div.dataset.type = 'icon';
+                div.dataset.url = icon.url;
+                div.dataset.name = icon.name;
+				div.title = icon.title || '';
+                const img = document.createElement('img');
+                img.onerror = () => {
+                    img.alt = `Erreur`;
+                };
+                img.src = icon.url;
+                img.alt = icon.name;
+                div.appendChild(img);
+                iconPalette.appendChild(div);
+                div.addEventListener('dragstart', handleDragStart);
+            });
+        }
+
+        function updateIconSizeDisplay() {
+            initialIconSize = parseInt(iconSizeSlider.value, 10);
+            iconSizeValue.textContent = `${initialIconSize}px`;
+            iconPalette.style.setProperty('--current-icon-size', `${initialIconSize}px`);
+        }
+
+        // --- Repositionnement Layout ---
+        function updateLayoutBasedOnImage() {
+            repositionAnnotationsBasedOnZoom();
+            updateSurroundingLabels();
+            redrawArrows(); // Redraw arrows based on current positions
+        }
+
+         // --- Redraw Arrows ---
+        function redrawArrows() {
+            if (!arrowSvgLayer) return;
+            // Optimized redraw: update existing lines/handles instead of removing/recreating
+            arrows.forEach(arrow => {
+                if (arrow.groupEl) {
+                    arrow.lineEl.setAttribute('x1', arrow.x1);
+                    arrow.lineEl.setAttribute('y1', arrow.y1);
+                    arrow.lineEl.setAttribute('x2', arrow.x2);
+                    arrow.lineEl.setAttribute('y2', arrow.y2);
+                    arrow.startHandleEl.setAttribute('cx', arrow.x1);
+                    arrow.startHandleEl.setAttribute('cy', arrow.y1);
+                    arrow.endHandleEl.setAttribute('cx', arrow.x2);
+                    arrow.endHandleEl.setAttribute('cy', arrow.y2);
+                } else {
+                    // Should not happen if created correctly, but as fallback:
+                    console.warn("Arrow data missing groupEl, attempting recreation:", arrow.id);
+                    recreateArrowElement(arrow); // A function to recreate SVG elements if needed
+                }
+            });
+        }
+
+        // Helper to recreate SVG for an arrow if elements are lost (e.g., during complex DOM updates)
+        function recreateArrowElement(arrowData) {
+            ensureSvgLayer();
+            const existingGroup = document.getElementById(arrowData.id);
+            if (existingGroup) existingGroup.remove(); // Remove old if exists
+
+            const group = document.createElementNS(SVG_NS, "g");
+            group.setAttribute('id', arrowData.id);
+            group.dataset.arrowId = arrowData.id;
+
+            const finalLine = document.createElementNS(SVG_NS, "line");
+            finalLine.setAttribute('x1', arrowData.x1);
+            finalLine.setAttribute('y1', arrowData.y1);
+            finalLine.setAttribute('x2', arrowData.x2);
+            finalLine.setAttribute('y2', arrowData.y2);
+            finalLine.setAttribute('stroke', arrowData.color || '#000000');
+            finalLine.setAttribute('stroke-width', '2');
+            finalLine.setAttribute('marker-end', 'url(#arrowhead)');
+            finalLine.style.color = arrowData.color || '#000000';
+            group.appendChild(finalLine);
+
+            const startHandle = document.createElementNS(SVG_NS, "circle");
+            startHandle.setAttribute('cx', arrowData.x1);
+            startHandle.setAttribute('cy', arrowData.y1);
+            startHandle.classList.add('arrow-handle', 'arrow-start-handle');
+            startHandle.dataset.handleType = 'start';
+            startHandle.addEventListener('mousedown', startArrowHandleDrag);
+            group.appendChild(startHandle);
+
+            const endHandle = document.createElementNS(SVG_NS, "circle");
+            endHandle.setAttribute('cx', arrowData.x2);
+            endHandle.setAttribute('cy', arrowData.y2);
+            endHandle.classList.add('arrow-handle', 'arrow-end-handle');
+            endHandle.dataset.handleType = 'end';
+            endHandle.addEventListener('mousedown', startArrowHandleDrag);
+            group.appendChild(endHandle);
+
+            arrowSvgLayer.appendChild(group);
+
+            // Update references in the arrow data object
+            arrowData.groupEl = group;
+            arrowData.lineEl = finalLine;
+            arrowData.startHandleEl = startHandle;
+            arrowData.endHandleEl = endHandle;
+
+            // Re-select if it was selected
+            if (selectedItem.type === 'arrow' && selectedItem.id === arrowData.id) {
+                selectElement(group);
+            }
+        }
+
+
+        // --- Mise à Jour Position/Taille Labels Fixes ---
+        function updateSurroundingLabels() {
+            if (!imageContainer.classList.contains('has-image')) {
+                topLabelsContainer.style.visibility = 'hidden';
+                bottomLabelsContainer.style.visibility = 'hidden';
+                leftLabelsContainer.style.visibility = 'hidden';
+                rightLabelsContainer.style.visibility = 'hidden';
+				if (mainTitleContainer) mainTitleContainer.style.visibility = 'hidden'; // Cache aussi le titre
+                return;
+            }
+			// 1. Obtenir la géométrie de base de l'image
+            const unscaledRect = getUnscaledImageRect();
+            const scaledLeft = unscaledRect.left;
+            const scaledTop = unscaledRect.top;
+            const scaledWidth = unscaledRect.width;
+            const scaledHeight = unscaledRect.height;
+
+			// 2. Calcule la position top des top-labels
+			const topLabelsTop = scaledTop - topBottomLabelHeightPx;
+
+			// 3. Positionne les conteneurs de labels
+            topLabelsContainer.style.left = `${scaledLeft}px`;
+            topLabelsContainer.style.top = `${scaledTop - topBottomLabelHeightPx}px`;
+            topLabelsContainer.style.width = `${scaledWidth}px`;
+            topLabelsContainer.style.height = `${topBottomLabelHeightPx}px`;
+
+            bottomLabelsContainer.style.left = `${scaledLeft}px`;
+            bottomLabelsContainer.style.top = `${scaledTop + scaledHeight}px`;
+            bottomLabelsContainer.style.width = `${scaledWidth}px`;
+            bottomLabelsContainer.style.height = `${topBottomLabelHeightPx}px`;
+
+            leftLabelsContainer.style.left = `${scaledLeft - leftRightLabelWidthPx}px`;
+            leftLabelsContainer.style.top = `${scaledTop}px`;
+            leftLabelsContainer.style.height = `${scaledHeight}px`;
+            leftLabelsContainer.style.width = `${leftRightLabelWidthPx}px`;
+
+            rightLabelsContainer.style.left = `${scaledLeft + scaledWidth}px`;
+            rightLabelsContainer.style.top = `${scaledTop}px`;
+            rightLabelsContainer.style.height = `${scaledHeight}px`;
+            rightLabelsContainer.style.width = `${leftRightLabelWidthPx}px`;
+
+
+			// 4. Calcule et positionne le titre principal
+			if (mainTitleContainer) {
+                // Positionne le titre au-dessus des labels du haut
+                const titleTop = Math.max(5, topLabelsTop - mainTitleContainer.offsetHeight - 5); // Position above top labels with margin
+
+				mainTitleContainer.style.top = `${titleTop}px`;
+				// left et transform sont gérés par CSS pour le centrage
+				mainTitleContainer.style.visibility = 'visible'; // Rend visible
+			}
+
+            topLabelsContainer.style.visibility = 'visible';
+            bottomLabelsContainer.style.visibility = 'visible';
+            leftLabelsContainer.style.visibility = 'visible';
+            rightLabelsContainer.style.visibility = 'visible';
+        }
+
+        // --- Repositionnement Annotations Déplaçables ---
+        function repositionAnnotationsBasedOnZoom() {
+            if (!imageContainer.classList.contains('has-image'))
+                return;
+            annotations.forEach(anno => {
+                const element = document.getElementById(anno.id);
+                if (element && anno.relX !== undefined && anno.relY !== undefined) {
+                    const absolutePos = relativeToAbsolute(anno.relX, anno.relY);
+                    element.style.left = `${absolutePos.x}px`;
+                    element.style.top = `${absolutePos.y}px`;
+                    // Ensure size is also applied (might be needed if loaded without explicit size)
+                    if(anno.width) element.style.width = `${anno.width}px`;
+                    if(anno.height && anno.height !== 'auto') element.style.height = `${anno.height}px`;
+
+                }
+            });
+        }
+
+        // --- Configuration Event Listeners ---
+        function setupEventListeners() {
+            imageLoader.addEventListener('change', handleImageLoad);
+            jsonIconLoader.addEventListener('change', handleJsonIconLoad);
+            projectLoader.addEventListener('change', handleProjectLoad); 
+			const hideAnnotBtn = document.getElementById('hide_annot');
+			if (hideAnnotBtn) {
+				// MODIFIÉ: L'écouteur appelle maintenant la nouvelle fonction de bascule
+				hideAnnotBtn.addEventListener('click', toggleEmptyLabelsVisibility);
+			} else {
+				console.error("Le bouton #hide_annot n'a pas été trouvé !");
+			}
+            mainContent.addEventListener('dragover', handleDragOverMain);
+            mainContent.addEventListener('dragleave', handleDragLeaveMain);
+            mainContent.addEventListener('drop', handleDropMain);
+            draggableTextTemplate.addEventListener('dragstart', handleDragStart);
+            document.addEventListener('paste', handlePaste);
+            iconSizeSlider.addEventListener('input', updateIconSizeDisplay);
+            colorPalette.addEventListener('click', handleColorPaletteClick); 
+            mainContent.addEventListener('click', handleDeselect);
+            sidebarLeft.addEventListener('click', (e) => {
+                if (e.target === sidebarLeft)
+                    deselectElement();
+            });
+            sidebarRight.addEventListener('click', (e) => {
+                if (e.target === sidebarRight)
+                    deselectElement();
+            });
+            deleteBtn.addEventListener('click', deleteSelectedElement);
+            document.addEventListener('mouseup', handleGlobalMouseUp);
+            document.addEventListener('mousemove', handleGlobalMouseMove);
+            window.addEventListener('resize', debounce(() => {
+                    computeLabelHeights();
+                    updateLayoutBasedOnImage();
+                }, 100));
+
+            // Export listeners
+            exportProjectBtn.addEventListener('click', exportProjectToJson);
+
+             // Title editing listener
+            machineNameSpan.addEventListener('blur', () => {
+                 console.log("Project title changed to:", machineNameSpan.textContent);
+            });
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // --- Gestion Import JSON Icones Palette ---
+        function handleJsonIconLoad(event) {
+            const file = event.target.files[0];
+            if (!file || file.type !== 'application/json') {
+                alert("Sélectionnez un fichier JSON.");
+                jsonIconLoader.value = null;
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const jsonData = JSON.parse(e.target.result);
+                    if (!Array.isArray(jsonData) || !jsonData.every(item => item && typeof item === 'object' && 'name' in item && 'url' in item)) {
+                        throw new Error("Format JSON invalide pour la palette d'icônes.");
+                    }
+					currentIconData = currentIconData.concat(jsonData);
+                    populateIconPalette();
+                } catch (error) {
+                    alert(`Erreur chargement JSON icônes: ${error.message}`);
+                } finally {
+                    jsonIconLoader.value = null;
+                }
+            };
+            reader.onerror = () => {
+                alert("Erreur lecture fichier.");
+                jsonIconLoader.value = null;
+            };
+            reader.readAsText(file);
+        }
+
+        // --- Gestion Import PROJET JSON ---
+        function handleProjectLoad(event) {
+            const file = event.target.files[0];
+            if (!file || file.type !== 'application/json') {
+                alert("Sélectionnez un fichier de projet JSON.");
+                projectLoader.value = null; 
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const projectData = JSON.parse(e.target.result);
+
+                    if (!projectData || typeof projectData !== 'object' ||
+                        !projectData.imageDataUrl || typeof projectData.imageDataUrl !== 'string' ||
+                        !projectData.projectTitle || typeof projectData.projectTitle !== 'string' ||
+                        !Array.isArray(projectData.fixedLabels) ||
+                        !Array.isArray(projectData.draggableAnnotations) ||
+                        !Array.isArray(projectData.arrows)) {
+                        throw new Error("Format de fichier projet JSON invalide ou incomplet.");
+                    }
+
+                    clearAllProjectData(); 
+
+                    loadImageFromDataUrl(projectData.imageDataUrl)
+                        .then(() => {
+                            machineNameSpan.textContent = projectData.projectTitle;
+                            loadFixedLabels(projectData.fixedLabels);
+                            loadDraggableAnnotations(projectData.draggableAnnotations);
+                            loadArrows(projectData.arrows);
+                            updateLayoutBasedOnImage(); 
+                        })
+                        .catch(error => {
+                            console.error("Erreur chargement image depuis projet:", error);
+                            alert(`Erreur lors du chargement de l'image du projet: ${error.message}`);
+                            clearAllProjectData();
+                            updateLayoutBasedOnImage(); 
+                        });
+
+                } catch (error) {
+                    console.error("Erreur importation projet:", error);
+                    alert(`Erreur importation projet: ${error.message}`);
+                     clearAllProjectData();
+                     updateLayoutBasedOnImage(); 
+                } finally {
+                    projectLoader.value = null; 
+                }
+            };
+            reader.onerror = () => {
+                alert("Erreur lecture fichier projet.");
+                projectLoader.value = null;
+            };
+            reader.readAsText(file);
+        }
+
+        // --- Helper function to load image from Data URL ---
+        function loadImageFromDataUrl(dataUrl) {
+            return new Promise((resolve, reject) => {
+                if (!dataUrl.startsWith('data:image/')) {
+                    return reject(new Error("Le Data URL de l'image est invalide."));
+                }
+                const img = new Image();
+                img.onload = () => {
+                    imageNaturalWidth = img.naturalWidth;
+                    imageNaturalHeight = img.naturalHeight;
+
+                    const mainRect = mainContent.getBoundingClientRect();
+                    const availableWidth = mainRect.width - (leftRightLabelWidthPx * 2) - 40;
+                    const availableHeight = mainRect.height - (topBottomLabelHeightPx * 2) - 40;
+                    let targetWidth = imageNaturalWidth;
+                    let targetHeight = imageNaturalHeight;
+                    const ratio = targetWidth / targetHeight;
+
+                    if (targetWidth > availableWidth) {
+                        targetWidth = availableWidth;
+                        targetHeight = targetWidth / ratio;
+                    }
+                    if (targetHeight > availableHeight) {
+                        targetHeight = availableHeight;
+                        targetWidth = targetHeight * ratio;
+                    }
+
+                    imageDisplayWidth = targetWidth;
+                    imageDisplayHeight = targetHeight;
+
+                    imageContainer.style.width = `${imageDisplayWidth}px`;
+                    imageContainer.style.height = `${imageDisplayHeight}px`;
+                    loadedImage.src = dataUrl; 
+                    imageContainer.classList.add('has-image');
+                    dropPrompt.style.display = 'none';
+
+                    resolve(); 
+                };
+                img.onerror = (error) => {
+                    reject(new Error("Impossible de charger l'image depuis le Data URL."));
+                };
+                img.src = dataUrl;
+            });
+        }
+
+
+        // --- Helper function to load fixed labels ---
+        function loadFixedLabels(fixedLabelsData) {
+             let maxIdNum = -1; 
+             fixedLabelsData.forEach(labelData => {
+                const element = document.getElementById(labelData.id);
+                if (element) {
+                    const textSpan = element.querySelector('.label-text-content');
+                    if (textSpan) {
+                        textSpan.textContent = labelData.text || '';
+                    }
+                    element.style.color = labelData.color || '#555';
+                    // MODIFIÉ: On utilise la nouvelle classe pour le texte masqué
+                    if (labelData.isTextHidden) {
+                        element.classList.add('label-text-hidden');
+                    } else {
+                        element.classList.remove('label-text-hidden');
+                    }
+                } else {
+                    console.warn(`Label fixe avec ID ${labelData.id} non trouvé lors de l'import.`);
+                }
+                 const idParts = labelData.id.split('-');
+                 const num = parseInt(idParts[idParts.length - 1], 10);
+                 if (!isNaN(num)) maxIdNum = Math.max(maxIdNum, num);
+             });
+        }
+
+        // --- Helper function to load draggable annotations ---
+        function loadDraggableAnnotations(draggableAnnotationsData) {
+            let maxIdNum = -1;
+            draggableAnnotationsData.forEach(annoData => {
+                if (annoData && typeof annoData === 'object' && annoData.id !== undefined && annoData.type !== undefined && annoData.relX !== undefined && annoData.relY !== undefined) {
+                    const element = createAnnotationElement(annoData);
+                    if (element) {
+                        annotations.push(annoData);
+                        const numericId = parseInt(String(annoData.id).replace('anno-', ''), 10);
+                        if (!isNaN(numericId)) {
+                             maxIdNum = Math.max(maxIdNum, numericId);
+                        }
+                    } else {
+                         console.warn("Échec de la création de l'annotation lors de l'import:", annoData);
+                    }
+                } else {
+                     console.warn("Format d'annotation déplaçable invalide ignoré:", annoData);
+                }
+            });
+             nextAnnotationId = maxIdNum + 1;
+        }
+
+        // --- Helper function to load arrows ---
+        function loadArrows(arrowsData) {
+            ensureSvgLayer(); 
+            let maxIdNum = -1;
+             arrowsData.forEach(arrowData => {
+                 if (arrowData && arrowData.id !== undefined && arrowData.x1 !== undefined && arrowData.y1 !== undefined && arrowData.x2 !== undefined && arrowData.y2 !== undefined) {
+                     finalizeArrow(null, arrowData.x1, arrowData.y1, arrowData.x2, arrowData.y2, arrowData.color || '#000000', arrowData.id);
+                     const numericId = parseInt(String(arrowData.id).replace('arrow-', ''), 10);
+                     if (!isNaN(numericId)) {
+                         maxIdNum = Math.max(maxIdNum, numericId);
+                     }
+                 } else {
+                    console.warn("Format de flèche invalide ignoré:", arrowData);
+                 }
+            });
+             nextArrowId = maxIdNum + 1;
+        }
+
+
+        // --- Gestion Chargement Image ---
+        function handleImageLoad(event) {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                clearAllProjectData();
+                loadImageFromFile(file);
+            }
+            imageLoader.value = null;
+        }
+        function handlePaste(event) {
+            const clipboardItems = event.clipboardData?.items;
+            if (!clipboardItems) {
+                console.log("Données presse-papier non accessibles.");
+                return;
+            }
+            for (let i = 0; i < clipboardItems.length; i++) {
+                const item = clipboardItems[i];
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    const imageFile = item.getAsFile();
+                    if (imageFile) {
+                        console.log("Image collée détectée:", imageFile.name, imageFile.type);
+                        event.preventDefault();
+                        clearAllProjectData();
+                        loadImageFromFile(imageFile);
+                        return;
+                    }
+                }
+            }
+        }
+        function loadImageFromFile(file) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const imageUrl = e.target.result;
+                loadImageFromDataUrl(imageUrl)
+                    .then(() => {
+                        updateLayoutBasedOnImage(); 
+                    })
+                    .catch(error => {
+                        alert(`Erreur chargement image: ${error.message}`);
+                        clearAllProjectData(); 
+                        updateLayoutBasedOnImage();
+                    });
+            };
+             reader.onerror = () => {
+                 alert("Erreur de lecture du fichier image.");
+             };
+            reader.readAsDataURL(file);
+        }
+
+        // --- Clear All Project Data ---
+        function clearAllProjectData() {
+            annotations.forEach(anno => {
+                const el = document.getElementById(anno.id);
+                if (el) el.remove();
+            });
+            annotations = [];
+            nextAnnotationId = 0;
+
+            arrows.forEach(arrow => {
+                if (arrow.groupEl) arrow.groupEl.remove();
+            });
+            arrows = [];
+            nextArrowId = 0;
+            if (arrowSvgLayer) {
+                 const defs = arrowSvgLayer.querySelector('defs')?.outerHTML || '<defs></defs>';
+                 arrowSvgLayer.innerHTML = defs;
+            }
+
+            // MODIFIÉ: On remet juste le texte par défaut
+            document.querySelectorAll('.surrounding-labels .annotation.text-annotation').forEach(labelEl => {
+                const textSpan = labelEl.querySelector('.label-text-content');
+                if (textSpan) {
+                    textSpan.textContent = 'Saisir';
+                }
+                labelEl.style.color = '#555';
+                labelEl.classList.remove('label-text-hidden');
+            });
+
+            machineNameSpan.textContent = "Désignation";
+
+            deselectElement();
+        }
+
+        // --- Coordonnées Relatif <-> Absolu (Zoom = 1) ---
+        function getUnscaledImageRect() {
+            if (!imageContainer.classList.contains('has-image')) {
+                return {
+                    left: 0,
+                    top: 0,
+                    width: 0,
+                    height: 0
+                };
+            }
+            const wrapperRect = imageWrapper.getBoundingClientRect();
+            const mainRect = mainContent.getBoundingClientRect();
+            const scrollX = mainContent.scrollLeft;
+            const scrollY = mainContent.scrollTop;
+            const containerViewportLeft = wrapperRect.left - mainRect.left + (wrapperRect.width - imageDisplayWidth) / 2;
+            const containerViewportTop = wrapperRect.top - mainRect.top + (wrapperRect.height - imageDisplayHeight) / 2;
+            const containerScrollLeft = containerViewportLeft + scrollX;
+            const containerScrollTop = containerViewportTop + scrollY;
+
+            return {
+                left: containerScrollLeft,
+                top: containerScrollTop,
+                width: imageDisplayWidth,
+                height: imageDisplayHeight
+            };
+        }
+        function absoluteToRelative(absoluteX, absoluteY) {
+            const rect = getUnscaledImageRect();
+            if (rect.width === 0 || rect.height === 0)
+                return {
+                    relX: 0,
+                    relY: 0
+                };
+            const relX = Math.max(0, Math.min(1, (absoluteX - rect.left) / rect.width));
+            const relY = Math.max(0, Math.min(1, (absoluteY - rect.top) / rect.height));
+            return {
+                relX,
+                relY
+            };
+        }
+        function relativeToAbsolute(relX, relY) {
+            const rect = getUnscaledImageRect();
+            const scaledLeft = rect.left;
+            const scaledTop = rect.top;
+            const scaledWidth = rect.width;
+            const scaledHeight = rect.height;
+            const absoluteX = scaledLeft + relX * scaledWidth;
+            const absoluteY = scaledTop + relY * scaledHeight;
+            return {
+                x: absoluteX,
+                y: absoluteY
+            };
+        }
+
+        // --- Drag & Drop Annotations ---
+        function handleDragStart(event) {
+            if (event.target.isContentEditable || event.target.closest('[contenteditable="true"]')) {
+                event.preventDefault();
+                return;
+            }
+            const type = event.target.dataset.type;
+            event.dataTransfer.setData('text/plain', type);
+            if (type === 'icon') {
+                event.dataTransfer.setData('application/x-icon-url', event.target.dataset.url);
+            }
+        }
+        function handleDragOverMain(event) {
+            event.preventDefault();
+            const types = event.dataTransfer.types;
+            if (types.includes('Files') || types.includes('text/plain')) {
+                mainContent.classList.add('dragging-over');
+                event.dataTransfer.dropEffect = types.includes('Files') ? 'copy' : 'move';
+            } else {
+                 event.dataTransfer.dropEffect = 'none';
+            }
+        }
+        function handleDragLeaveMain(event) {
+            if (!mainContent.contains(event.relatedTarget)) {
+                mainContent.classList.remove('dragging-over');
+            }
+        }
+        function handleDropMain(event) {
+            event.preventDefault();
+            mainContent.classList.remove('dragging-over');
+
+            if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+                const file = event.dataTransfer.files[0];
+                if (file && file.type.startsWith('image/')) {
+                    clearAllProjectData();
+                    loadImageFromFile(file);
+                    return;
+                }
+                 if (file && file.type === 'application/json') {
+                     projectLoader.files = event.dataTransfer.files;
+                     const changeEvent = new Event('change');
+                     projectLoader.dispatchEvent(changeEvent);
+                     return;
+                 }
+            }
+
+            const type = event.dataTransfer.getData('text/plain');
+            const url = event.dataTransfer.getData('application/x-icon-url');
+
+            if ((type === 'text' || type === 'icon') && imageContainer.classList.contains('has-image')) {
+                placeAnnotation(event, type, url);
+            } else if (!imageContainer.classList.contains('has-image')) {
+                alert("Chargez ou déposez une image avant d'ajouter des annotations.");
+            }
+        }
+
+        // --- Création/Placement Annotation (Déplaçable) ---
+        function createAnnotationElement(data) {
+            if (data.type === 'fixed-label')
+                return null;
+
+            let element;
+            const annotationId = data.id || `anno-${nextAnnotationId++}`;
+
+            if (data.type === 'text') {
+                element = document.createElement('div');
+                element.classList.add('annotation', 'text-annotation');
+                element.textContent = data.text || 'Texte';
+                element.style.color = data.color || '#000000';
+                element.style.width = data.width ? `${data.width}px` : '100px';
+                element.style.height = data.height && data.height !== 'auto' ? `${data.height}px` : 'auto';
+            } else if (data.type === 'icon') {
+                if (!data.url) {
+                     console.error("Icon annotation data missing URL:", data);
+                     return null;
+                 }
+                element = document.createElement('div');
+                element.classList.add('annotation', 'icon-annotation');
+                const img = document.createElement('img');
+                 img.onerror = () => img.alt = 'Erreur';
+                img.src = data.url;
+                const size = data.width || data.height || initialIconSize;
+                element.style.width = `${size}px`;
+                element.style.height = `${size}px`;
+                img.style.width = '100%';
+                img.style.height = '100%';
+                element.appendChild(img);
+            } else {
+                console.warn("Type d'annotation inconnu:", data.type);
+                return null;
+            }
+
+            element.id = annotationId;
+            element.dataset.type = data.type;
+            if(data.url) element.dataset.url = data.url;
+
+            const delBtn = document.createElement('div');
+            delBtn.classList.add('delete-btn');
+            delBtn.innerHTML = '×';
+            delBtn.title = "Supprimer";
+            delBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteElementById(annotationId);
+            });
+            element.appendChild(delBtn);
+
+            if (data.type === 'text') {
+                const resizer = document.createElement('div');
+                resizer.classList.add('resizer', 'br');
+                resizer.title = "Redimensionner";
+                resizer.addEventListener('mousedown', startResize);
+                element.appendChild(resizer);
+            }
+
+            const initialPos = relativeToAbsolute(data.relX, data.relY);
+            element.style.left = `${initialPos.x}px`;
+            element.style.top = `${initialPos.y}px`;
+
+            mainContent.appendChild(element);
+
+            element.addEventListener('mousedown', startDragAnnotation);
+            if (data.type === 'text') {
+                element.addEventListener('dblclick', editTextAnnotation);
+            }
+
+            data.id = annotationId; 
+            if (data.type === 'text' && element.style.height === 'auto') {
+                 const computedHeight = element.offsetHeight;
+                 data.height = computedHeight; 
+                 element.style.height = `${computedHeight}px`;
+            }
+            if (!data.width) {
+                 data.width = element.offsetWidth;
+            }
+
+            return element;
+        }
+        function placeAnnotation(event, type, url = null) {
+            const mainRect = mainContent.getBoundingClientRect();
+            const scrollX = mainContent.scrollLeft;
+            const scrollY = mainContent.scrollTop;
+            let dropX = event.clientX - mainRect.left + scrollX;
+            let dropY = event.clientY - mainRect.top + scrollY;
+
+            let initialData = { type: type };
+            let elementTempSize = { w: 100, h: 30 };
+
+            if (type === 'icon') {
+                if (!url) {
+                    alert("Erreur: URL de l'icône manquante.");
+                    return;
+                 }
+                initialData.url = url;
+                initialData.width = initialIconSize;
+                initialData.height = initialIconSize;
+                elementTempSize = { w: initialIconSize, h: initialIconSize };
+            } else { // type === 'text'
+                initialData.text = 'Nouveau Texte';
+                initialData.color = activeColor;
+                initialData.width = 100;
+                initialData.height = 'auto';
+                elementTempSize = { w: 100, h: 30 };
+            }
+
+            let targetX = dropX - elementTempSize.w / 2;
+            let targetY = dropY - elementTempSize.h / 2;
+
+            const relativePos = absoluteToRelative(targetX, targetY);
+            initialData.relX = relativePos.relX;
+            initialData.relY = relativePos.relY;
+
+            const element = createAnnotationElement(initialData);
+            if (element) {
+                annotations.push(initialData);
+                selectElement(element);
+            } else {
+                 alert("Erreur lors de la création de l'annotation.");
+            }
+        }
+
+
+        // --- Sélection / Désélection (Gère annotations ET flèches) ---
+        function selectElement(element) {
+             const previouslySelected = selectedItem.element;
+            deselectElement();
+
+             if (previouslySelected === element && (element?.dataset?.type === 'text' || element?.dataset?.type === 'fixed-label')) {
+             } else if (element) {
+                selectedItem.element = element;
+                if (element.classList.contains('annotation')) {
+                    selectedItem.type = 'annotation';
+                    selectedItem.id = element.id;
+                    element.classList.add('selected');
+                    deleteBtn.disabled = (element.dataset.type === 'fixed-label');
+                    if (element.dataset.type === 'text' || element.dataset.type === 'fixed-label') {
+                        updateActiveColorSwatch(element.style.color || '#000000');
+                    }
+                } else if (element.tagName.toLowerCase() === 'g' && element.dataset.arrowId) {
+                    selectedItem.type = 'arrow';
+                    selectedItem.id = element.dataset.arrowId;
+                    element.classList.add('selected');
+                    element.querySelectorAll('.arrow-handle').forEach(h => h.style.display = 'block');
+                    deleteBtn.disabled = false;
+                    const arrowData = arrows.find(a => a.id === selectedItem.id);
+                    if (arrowData)
+                        updateActiveColorSwatch(arrowData.color || '#000000');
+                } else {
+                    selectedItem = { type: null, id: null, element: null };
+                }
+            }
+        }
+        function deselectElement() {
+            if (selectedItem.element) {
+                if (selectedItem.type === 'annotation' && (selectedItem.element.dataset.type === 'text' || selectedItem.element.dataset.type === 'fixed-label')) {
+                     const textSpan = selectedItem.element.querySelector('.label-text-content') || selectedItem.element;
+                     if (textSpan.isContentEditable) {
+                         stopEditingText(textSpan, true);
+                     }
+                }
+                selectedItem.element.classList.remove('selected');
+                if (selectedItem.type === 'arrow') {
+                    selectedItem.element.querySelectorAll('.arrow-handle').forEach(h => h.style.display = 'none');
+                }
+            }
+            selectedItem = { type: null, id: null, element: null };
+            deleteBtn.disabled = true;
+        }
+        function handleDeselect(event) {
+             const clickedAnnotation = event.target.closest('.annotation');
+             const clickedArrowGroup = event.target.closest('#arrow-svg-layer g');
+             const clickedArrowHandle = event.target.closest('.arrow-handle');
+             const clickedOriginHandle = event.target.closest('.arrow-origin-handle');
+             const clickedDeleteBtn = event.target.closest('.delete-btn');
+             const clickedResizer = event.target.closest('.resizer');
+             const clickedColorSwatch = event.target.closest('.color-swatch');
+             const clickedTitle = event.target.closest('#main-title-container span.editable');
+             const clickedSidebarControl = event.target.closest('#sidebar-left button, #sidebar-left input, #sidebar-right button, #sidebar-right input');
+
+             if (!clickedAnnotation && !clickedArrowGroup && !clickedArrowHandle && !clickedOriginHandle && !clickedDeleteBtn && !clickedResizer && !clickedColorSwatch && !clickedTitle && !clickedSidebarControl) {
+                 deselectElement();
+             }
+        }
+
+
+        // --- Déplacement Annotation (Ignore labels fixes) ---
+        function startDragAnnotation(event) {
+            const annotationElement = event.currentTarget;
+            if (annotationElement.dataset.type === 'fixed-label') return;
+             if (event.target.classList.contains('resizer') ||
+                 event.target.classList.contains('delete-btn') ||
+                 event.target.closest('[contenteditable="true"]')) {
+                 return;
+             }
+            if (event.detail > 1) return;
+
+            selectElement(annotationElement);
+            if (!selectedItem.element || selectedItem.type !== 'annotation' || selectedItem.element.dataset.type === 'fixed-label') return;
+
+            isDragging = true;
+            isResizing = false;
+            isDrawingArrow = false;
+            isDraggingArrowHandle = false;
+
+            const rect = selectedItem.element.getBoundingClientRect();
+            dragOffsetX = event.clientX - rect.left;
+            dragOffsetY = event.clientY - rect.top;
+
+            selectedItem.element.style.cursor = 'grabbing';
+            event.preventDefault();
+        }
+
+
+        // --- Redimensionnement Texte (Ignore labels fixes) ---
+        function startResize(event) {
+            const annotationElement = event.target.closest('.annotation');
+            if (!annotationElement || annotationElement.dataset.type !== 'text') return;
+
+            event.stopPropagation();
+            event.preventDefault();
+
+            isResizing = true;
+            isDragging = false;
+            isDrawingArrow = false;
+            isDraggingArrowHandle = false;
+
+            selectElement(annotationElement);
+            if (!selectedItem.element || selectedItem.type !== 'annotation') {
+                isResizing = false;
+                return;
+            }
+
+            resizeStartX = event.clientX;
+            resizeStartY = event.clientY;
+            initialWidth = selectedItem.element.offsetWidth;
+            initialHeight = selectedItem.element.offsetHeight;
+
+            selectedItem.element.style.cursor = 'nwse-resize';
+        }
+        function handleResizeMove(event) {
+            if (!isResizing || !selectedItem.element || selectedItem.element.dataset.type !== 'text') return;
+
+            const dx = event.clientX - resizeStartX;
+            const dy = event.clientY - resizeStartY;
+
+            let newWidth = Math.max(30, initialWidth + dx);
+            let newHeight = Math.max(20, initialHeight + dy);
+
+            selectedItem.element.style.width = `${newWidth}px`;
+            selectedItem.element.style.height = `${newHeight}px`;
+        }
+
+
+        // --- Édition Texte (Normal et Fixed-Label) ---
+        function editTextAnnotation(event) {
+            const element = event.currentTarget;
+            const textSpan = element.querySelector('.label-text-content') || element;
+
+             if ((element.dataset.type !== 'text' && element.dataset.type !== 'fixed-label') || textSpan.isContentEditable) {
+                return;
+             }
+             event.preventDefault();
+             event.stopPropagation();
+
+            selectElement(element); 
+
+            originalLabelText = textSpan.textContent;
+
+            textSpan.contentEditable = true;
+            element.classList.add('editing');
+            textSpan.focus();
+
+            try {
+                const range = document.createRange();
+                range.selectNodeContents(textSpan);
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+            } catch (e) {
+                 console.warn("Could not select text for editing:", e);
+                 textSpan.focus();
+                 document.execCommand('selectAll', false, null);
+            }
+
+            textSpan.addEventListener('blur', handleTextBlur, { once: true });
+            textSpan.addEventListener('keydown', handleTextKeyDown);
+        }
+        function handleTextBlur(event) {
+            stopEditingText(event.target, true);
+        }
+        function handleTextKeyDown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                stopEditingText(event.target, true);
+            } else if (event.key === 'Escape') {
+                 event.preventDefault();
+                stopEditingText(event.target, false);
+            }
+        }
+        function stopEditingText(textSpan, saveChanges) {
+            if (!textSpan.isContentEditable) return;
+
+            const parentElement = textSpan.closest('.annotation');
+
+            textSpan.contentEditable = false;
+            if (parentElement) parentElement.classList.remove('editing');
+
+            textSpan.removeEventListener('blur', handleTextBlur);
+            textSpan.removeEventListener('keydown', handleTextKeyDown);
+
+            if (parentElement?.dataset.type === 'text') {
+                const data = findAnnotationData(parentElement.id);
+                let updatedData = {};
+
+                if (saveChanges) {
+                     const newText = textSpan.textContent;
+                     if (data && data.text !== newText) {
+                         updatedData.text = newText;
+                     }
+                } else {
+                     if (data) {
+                         textSpan.textContent = data.text;
+                     } else if (originalLabelText !== null) {
+                         textSpan.textContent = originalLabelText;
+                     }
+                }
+
+                 parentElement.style.height = 'auto';
+                 updatedData.height = parentElement.offsetHeight;
+                 parentElement.style.height = `${updatedData.height}px`;
+
+                if (Object.keys(updatedData).length > 0) {
+                    updateAnnotationData(parentElement.id, updatedData);
+                }
+
+            } else if (parentElement?.dataset.type === 'fixed-label') {
+                if (!saveChanges && originalLabelText !== null) {
+                    textSpan.textContent = originalLabelText;
+                    console.log("Fixed label edit cancelled, reverted to:", originalLabelText);
+                } else {
+                     console.log("Fixed label edited:", parentElement.id, "New text:", textSpan.textContent);
+                }
+            }
+
+            originalLabelText = null;
+        }
+
+
+        // --- Gestion Palette Couleur ---
+        function handleColorPaletteClick(event) {
+            const swatch = event.target.closest('.color-swatch');
+            if (!swatch) return;
+            applyColor(swatch.dataset.color);
+        }
+
+        function updateActiveColorSwatch(hexColor) {
+            if (!hexColor) return;
+            activeColor = hexColor;
+
+            const swatches = colorPalette.querySelectorAll('.color-swatch');
+            swatches.forEach(s => {
+                if (s.dataset.color.toLowerCase() === hexColor.toLowerCase()) {
+                    s.classList.add('active-color');
+                } else {
+                    s.classList.remove('active-color');
+                }
+            });
+        }
+
+        function applyColor(hexColor) {
+            if (!hexColor) return;
+            updateActiveColorSwatch(hexColor);
+
+            if (selectedItem.element) {
+                if (selectedItem.type === 'annotation') {
+                    if (selectedItem.element.dataset.type === 'text' || selectedItem.element.dataset.type === 'fixed-label') {
+                        selectedItem.element.style.color = hexColor;
+                        if (selectedItem.element.dataset.type === 'text') {
+                            updateAnnotationData(selectedItem.id, { color: hexColor });
+                        }
+                    }
+                } else if (selectedItem.type === 'arrow') {
+                    const arrow = arrows.find(a => a.id === selectedItem.id);
+                    if (arrow) {
+                        arrow.color = hexColor;
+                        if (arrow.lineEl) {
+                            arrow.lineEl.setAttribute('stroke', hexColor);
+                            arrow.groupEl.style.color = hexColor;
+                        }
+                    }
+                }
+            }
+        }
+
+
+        // --- Suppression (Annotation ou Flèche) ---
+        function deleteSelectedElement() {
+            if (!selectedItem.id || !selectedItem.element) return;
+
+            if (selectedItem.type === 'annotation') {
+                if (selectedItem.element.dataset.type !== 'fixed-label') {
+                    deleteElementById(selectedItem.id);
+                } else {
+                    console.warn("Cannot delete fixed labels.");
+                }
+            } else if (selectedItem.type === 'arrow') {
+                deleteArrowById(selectedItem.id);
+            }
+        }
+
+        function deleteElementById(id) {
+            const elementToRemove = document.getElementById(id);
+            if (elementToRemove && elementToRemove.dataset.type !== 'fixed-label') {
+                elementToRemove.remove();
+                annotations = annotations.filter(anno => anno.id !== id);
+                if (selectedItem.id === id) {
+                    deselectElement();
+                }
+                console.log("Deleted annotation:", id);
+            } else {
+                 console.warn("Attempted to delete non-existent or fixed element:", id);
+            }
+        }
+
+        function deleteArrowById(id) {
+            const arrowIndex = arrows.findIndex(a => a.id === id);
+            if (arrowIndex !== -1) {
+                const arrowToRemove = arrows[arrowIndex];
+                if (arrowToRemove.groupEl) {
+                    arrowToRemove.groupEl.remove();
+                }
+                arrows.splice(arrowIndex, 1);
+                if (selectedItem.id === id) {
+                    deselectElement();
+                }
+                 console.log("Deleted arrow:", id);
+            } else {
+                console.warn("Attempted to delete non-existent arrow:", id);
+            }
+        }
+
+
+        // --- Fonctions Données (Annotations normales) ---
+        function findAnnotationData(id) {
+            return annotations.find(anno => anno.id === id);
+        }
+        function updateAnnotationData(id, newData) {
+            const index = annotations.findIndex(anno => anno.id === id);
+            if (index !== -1) {
+                annotations[index] = { ...annotations[index], ...newData };
+            } else {
+                console.warn("Could not find annotation data to update for ID:", id);
+            }
+        }
+
+        // --- Dessin et Interaction Flèches ---
+        function ensureSvgLayer() {
+            if (!arrowSvgLayer) {
+                arrowSvgLayer = document.createElementNS(SVG_NS, "svg");
+                arrowSvgLayer.id = 'arrow-svg-layer';
+                arrowSvgLayer.innerHTML = `<defs><marker id="arrowhead" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 10 3.5, 0 7" fill="currentColor" /></marker></defs>`;
+                mainContent.insertBefore(arrowSvgLayer, imageWrapper);
+                arrowSvgLayer.addEventListener('click', handleSvgClick);
+            }
+        }
+        function getCoordsInMainContent(event) {
+            const mainRect = mainContent.getBoundingClientRect();
+            const scrollX = mainContent.scrollLeft;
+            const scrollY = mainContent.scrollTop;
+            const x = event.clientX - mainRect.left + scrollX;
+            const y = event.clientY - mainRect.top + scrollY;
+            return { x, y };
+        }
+        function startArrowDraw(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            ensureSvgLayer();
+
+            const handle = event.currentTarget;
+            const labelElement = handle.closest('.annotation');
+
+            const handleRect = handle.getBoundingClientRect();
+            const originPos = getCoordsInMainContent({
+                clientX: handleRect.left + handleRect.width / 2,
+                clientY: handleRect.top + handleRect.height / 2
+            });
+
+            isDrawingArrow = true;
+            isDragging = false;
+            isResizing = false;
+            isDraggingArrowHandle = false;
+
+            currentDrawingArrow.startX = originPos.x;
+            currentDrawingArrow.startY = originPos.y;
+            currentDrawingArrow.color = labelElement.style.color || activeColor || '#000000';
+
+            currentDrawingArrow.lineElement = document.createElementNS(SVG_NS, "line");
+            currentDrawingArrow.lineElement.setAttribute('x1', currentDrawingArrow.startX);
+            currentDrawingArrow.lineElement.setAttribute('y1', currentDrawingArrow.startY);
+            currentDrawingArrow.lineElement.setAttribute('x2', currentDrawingArrow.startX);
+            currentDrawingArrow.lineElement.setAttribute('y2', currentDrawingArrow.startY);
+            currentDrawingArrow.lineElement.setAttribute('stroke', currentDrawingArrow.color);
+            currentDrawingArrow.lineElement.setAttribute('stroke-width', '2');
+            currentDrawingArrow.lineElement.setAttribute('marker-end', 'url(#arrowhead)');
+            currentDrawingArrow.lineElement.style.color = currentDrawingArrow.color;
+            currentDrawingArrow.lineElement.style.pointerEvents = 'none';
+
+            arrowSvgLayer.appendChild(currentDrawingArrow.lineElement);
+            mainContent.style.cursor = 'crosshair';
+        }
+        function drawArrowUpdate(event) {
+            if (!isDrawingArrow || !currentDrawingArrow.lineElement) return;
+            const currentPos = getCoordsInMainContent(event);
+            currentDrawingArrow.lineElement.setAttribute('x2', currentPos.x);
+            currentDrawingArrow.lineElement.setAttribute('y2', currentPos.y);
+        }
+        function stopArrowDraw(event) {
+            if (!isDrawingArrow) return;
+            isDrawingArrow = false;
+            mainContent.style.cursor = 'default';
+
+            if (currentDrawingArrow.lineElement) {
+                const endX = parseFloat(currentDrawingArrow.lineElement.getAttribute('x2'));
+                const endY = parseFloat(currentDrawingArrow.lineElement.getAttribute('y2'));
+                const startX = currentDrawingArrow.startX;
+                const startY = currentDrawingArrow.startY;
+                const dx = endX - startX;
+                const dy = endY - startY;
+                const lengthSq = dx * dx + dy * dy;
+
+                currentDrawingArrow.lineElement.remove();
+                currentDrawingArrow.lineElement = null;
+
+                if (lengthSq > 25) {
+                    finalizeArrow(null, startX, startY, endX, endY, currentDrawingArrow.color);
+                } else {
+                    console.log("Arrow draw cancelled, too short.");
+                }
+            }
+        }
+
+        function finalizeArrow(lineElementToRemove, x1, y1, x2, y2, color, existingId = null) {
+            if (lineElementToRemove) {
+                lineElementToRemove.remove();
+            }
+            ensureSvgLayer();
+
+            const arrowId = existingId || `arrow-${nextArrowId++}`;
+            const group = document.createElementNS(SVG_NS, "g");
+            group.setAttribute('id', arrowId);
+            group.dataset.arrowId = arrowId;
+
+            const finalLine = document.createElementNS(SVG_NS, "line");
+            finalLine.setAttribute('x1', x1);
+            finalLine.setAttribute('y1', y1);
+            finalLine.setAttribute('x2', x2);
+            finalLine.setAttribute('y2', y2);
+            finalLine.setAttribute('stroke', color || '#000000');
+            finalLine.setAttribute('stroke-width', '2');
+            finalLine.setAttribute('marker-end', 'url(#arrowhead)');
+            group.style.color = color || '#000000';
+            group.appendChild(finalLine);
+
+            const startHandle = document.createElementNS(SVG_NS, "circle");
+            startHandle.setAttribute('cx', x1);
+            startHandle.setAttribute('cy', y1);
+            startHandle.classList.add('arrow-handle', 'arrow-start-handle');
+            startHandle.dataset.handleType = 'start';
+            startHandle.addEventListener('mousedown', startArrowHandleDrag);
+            group.appendChild(startHandle);
+
+            const endHandle = document.createElementNS(SVG_NS, "circle");
+            endHandle.setAttribute('cx', x2);
+            endHandle.setAttribute('cy', y2);
+            endHandle.classList.add('arrow-handle', 'arrow-end-handle');
+            endHandle.dataset.handleType = 'end';
+            endHandle.addEventListener('mousedown', startArrowHandleDrag);
+            group.appendChild(endHandle);
+            arrowSvgLayer.appendChild(group);
+
+             const arrowData = {
+                id: arrowId,
+                x1: x1, y1: y1, x2: x2, y2: y2,
+                color: color || '#000000',
+                groupEl: group, lineEl: finalLine,
+                startHandleEl: startHandle, endHandleEl: endHandle
+            };
+
+             const existingIndex = arrows.findIndex(a => a.id === arrowId);
+             if (existingIndex === -1) {
+                 arrows.push(arrowData);
+             } else {
+                 arrows[existingIndex] = { ...arrows[existingIndex], ...arrowData };
+             }
+             selectElement(group);
+        }
+
+        function startArrowHandleDrag(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const handle = event.currentTarget;
+            const group = handle.closest('g');
+            if (!group || !group.dataset.arrowId) return;
+
+            const arrowId = group.dataset.arrowId;
+            const handleType = handle.dataset.handleType;
+            isDraggingArrowHandle = true;
+            isDragging = false;
+            isResizing = false;
+            isDrawingArrow = false;
+            draggedArrowHandle = { arrowId: arrowId, handleType: handleType };
+            selectElement(group);
+            handle.style.cursor = 'grabbing';
+            mainContent.style.cursor = 'grabbing';
+        }
+        function updateArrowOnHandleDrag(event) {
+            if (!isDraggingArrowHandle || !draggedArrowHandle.arrowId) return;
+            const arrow = arrows.find(a => a.id === draggedArrowHandle.arrowId);
+            if (!arrow || !arrow.groupEl) return;
+            const coords = getCoordsInMainContent(event);
+
+            if (draggedArrowHandle.handleType === 'start') {
+                arrow.x1 = coords.x; arrow.y1 = coords.y;
+                arrow.lineEl.setAttribute('x1', coords.x);
+                arrow.lineEl.setAttribute('y1', coords.y);
+                arrow.startHandleEl.setAttribute('cx', coords.x);
+                arrow.startHandleEl.setAttribute('cy', coords.y);
+            } else {
+                arrow.x2 = coords.x; arrow.y2 = coords.y;
+                arrow.lineEl.setAttribute('x2', coords.x);
+                arrow.lineEl.setAttribute('y2', coords.y);
+                arrow.endHandleEl.setAttribute('cx', coords.x);
+                arrow.endHandleEl.setAttribute('cy', coords.y);
+            }
+        }
+        function stopArrowHandleDrag() {
+            if (!isDraggingArrowHandle) return;
+            if (draggedArrowHandle.arrowId) {
+                 const arrow = arrows.find(a => a.id === draggedArrowHandle.arrowId);
+                 if (arrow) {
+                     const handleEl = (draggedArrowHandle.handleType === 'start') ? arrow.startHandleEl : arrow.endHandleEl;
+                     if (handleEl) handleEl.style.cursor = 'grab';
+                 }
+            }
+            mainContent.style.cursor = 'default';
+            isDraggingArrowHandle = false;
+            draggedArrowHandle = { arrowId: null, handleType: null };
+        }
+        function handleSvgClick(event) {
+            if (event.target.tagName.toLowerCase() === 'line' || event.target.classList.contains('arrow-handle')) {
+                const group = event.target.closest('g[data-arrow-id]');
+                if (group) {
+                    selectElement(group);
+                     event.stopPropagation();
+                } else {
+                     deselectElement();
+                }
+            } else if (event.target === arrowSvgLayer) {
+                deselectElement();
+            }
+        }
+
+
+        // SUPPRIMÉ: La fonction toggleLabelVisibility n'est plus nécessaire.
+
+		/**
+		 * MODIFIÉ: Gère la bascule de visibilité pour les labels contenant "Saisir".
+		 */
+		function toggleEmptyLabelsVisibility() {
+			const toggleBtn = document.getElementById('hide_annot');
+			const allFixedLabels = document.querySelectorAll('.surrounding-labels .annotation.text-annotation');
+
+			// Inverse l'état actuel
+			areEmptyLabelsHidden = !areEmptyLabelsHidden;
+
+			if (areEmptyLabelsHidden) {
+				// Cacher les labels vides
+				allFixedLabels.forEach(label => {
+					const textSpan = label.querySelector('.label-text-content');
+					if (textSpan && textSpan.textContent.trim() === 'Saisir') {
+						label.classList.add('label-text-hidden');
+					}
+				});
+				toggleBtn.textContent = 'Afficher Étiquettes Vides';
+			} else {
+				// Afficher tous les labels
+				allFixedLabels.forEach(label => {
+					label.classList.remove('label-text-hidden');
+				});
+				toggleBtn.textContent = 'Masquer Étiquettes Vides';
+			}
+		}
+
+        // --- Export PROJET JSON ---
+        function exportProjectToJson() {
+             if (!imageContainer.classList.contains('has-image') || !loadedImage.src.startsWith('data:image/')) {
+                 alert("Impossible d'exporter : aucune image chargée ou image non exportable (doit être en Data URL). Chargez l'image via l'application.");
+                 return;
+             }
+
+             const projectData = {
+                 projectTitle: machineNameSpan.textContent || "Sans titre",
+                 imageDataUrl: loadedImage.src,
+                 fixedLabels: [],
+                 draggableAnnotations: annotations,
+                 arrows: []
+             };
+
+             document.querySelectorAll('.surrounding-labels .annotation.text-annotation').forEach(labelEl => {
+                 const textSpan = labelEl.querySelector('.label-text-content');
+                 projectData.fixedLabels.push({
+                     id: labelEl.id,
+                     text: textSpan ? textSpan.textContent : '',
+                     color: labelEl.style.color || '#555',
+                     // MODIFIÉ: On sauvegarde l'état de visibilité du texte
+                     isTextHidden: labelEl.classList.contains('label-text-hidden')
+                 });
+             });
+
+             projectData.arrows = arrows.map(arrow => ({
+                 id: arrow.id,
+                 x1: arrow.x1, y1: arrow.y1,
+                 x2: arrow.x2, y2: arrow.y2,
+                 color: arrow.color
+             }));
+
+             try {
+                 const jsonString = JSON.stringify(projectData, null, 2);
+                 const blob = new Blob([jsonString], { type: 'application/json' });
+                 const url = URL.createObjectURL(blob);
+                 const a = document.createElement('a');
+                 a.href = url;
+                 const title = projectData.projectTitle || 'projet_annotation';
+				const safeTitle = title
+					.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+					.toLowerCase()
+					.replace(/\s+/g, '_')
+					.replace(/[\\/:*?"<>|]/g, '')
+					.replace(/[^a-z0-9_.-]/g, '_')
+					.replace(/__+/g, '_')
+					.replace(/^_+|_+$/g, '')
+					.substring(0, 100);
+                 a.download = `6_${safeTitle || 'projet'}.json`;
+                 document.body.appendChild(a);
+                 a.click();
+                 document.body.removeChild(a);
+                 URL.revokeObjectURL(url);
+                 console.log("Projet exporté avec succès.");
+             } catch (error) {
+                 console.error("Erreur lors de la sérialisation JSON ou du téléchargement :", error);
+                 alert("Erreur lors de l'exportation du projet en JSON.");
+             }
+        }
+		
+
+        // --- Listeners Globaux (souris) ---
+        function handleGlobalMouseUp(event) {
+             if (isDragging && selectedItem.type === 'annotation' && selectedItem.element && selectedItem.element.dataset.type !== 'fixed-label') {
+                selectedItem.element.style.cursor = 'move';
+                const finalAbsoluteX = parseFloat(selectedItem.element.style.left);
+                const finalAbsoluteY = parseFloat(selectedItem.element.style.top);
+                const finalRelativePos = absoluteToRelative(finalAbsoluteX, finalAbsoluteY);
+                updateAnnotationData(selectedItem.id, { relX: finalRelativePos.relX, relY: finalRelativePos.relY });
+            }
+            isDragging = false;
+
+             if (isResizing && selectedItem.type === 'annotation' && selectedItem.element && selectedItem.element.dataset.type === 'text') {
+                 selectedItem.element.style.cursor = 'move';
+                 updateAnnotationData(selectedItem.id, { width: selectedItem.element.offsetWidth, height: selectedItem.element.offsetHeight });
+            }
+            isResizing = false;
+
+            if (isDrawingArrow) {
+                stopArrowDraw(event);
+            }
+
+            if (isDraggingArrowHandle) {
+                stopArrowHandleDrag();
+            }
+        }
+
+        function handleGlobalMouseMove(event) {
+            if (isDragging && selectedItem.type === 'annotation' && selectedItem.element && selectedItem.element.dataset.type !== 'fixed-label') {
+                const mainRect = mainContent.getBoundingClientRect();
+                const scrollX = mainContent.scrollLeft;
+                const scrollY = mainContent.scrollTop;
+                let mouseXInContent = event.clientX - mainRect.left + scrollX;
+                let mouseYInContent = event.clientY - mainRect.top + scrollY;
+                let newX = mouseXInContent - dragOffsetX;
+                let newY = mouseYInContent - dragOffsetY;
+                 const elemWidth = selectedItem.element.offsetWidth;
+                 const elemHeight = selectedItem.element.offsetHeight;
+                 newX = Math.max(0, Math.min(newX, mainContent.scrollWidth - elemWidth));
+                 newY = Math.max(0, Math.min(newY, mainContent.scrollHeight - elemHeight));
+                selectedItem.element.style.left = `${newX}px`;
+                selectedItem.element.style.top = `${newY}px`;
+            }
+            else if (isResizing) {
+                 handleResizeMove(event);
+            }
+            else if (isDrawingArrow) {
+                drawArrowUpdate(event);
+            }
+            else if (isDraggingArrowHandle) {
+                updateArrowOnHandleDrag(event);
+            }
+        }
+
+    </script>
+
+</body>
+
+</html>
