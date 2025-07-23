@@ -1979,7 +1979,7 @@
             if (!arrowSvgLayer) {
                 arrowSvgLayer = document.createElementNS(SVG_NS, "svg");
                 arrowSvgLayer.id = 'arrow-svg-layer';
-                arrowSvgLayer.innerHTML = `<defs><marker id="arrowhead" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 10 3.5, 0 7" fill="currentColor" /></marker></defs>`;
+                arrowSvgLayer.innerHTML = `<defs><marker id="arrowhead" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 10 3.5, 0 7" fill="context-stroke" /></marker></defs>`;
                 mainContent.insertBefore(arrowSvgLayer, imageWrapper);
                 arrowSvgLayer.addEventListener('click', handleSvgClick);
             }
